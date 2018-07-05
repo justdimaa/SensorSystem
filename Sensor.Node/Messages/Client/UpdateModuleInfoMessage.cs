@@ -3,9 +3,9 @@ using Sensor.Node.Modules;
 
 namespace Sensor.Node.Messages.Client
 {
-    class UpdateModuleInfoMessage : ClientMessage
+    internal sealed class UpdateModuleInfoMessage : ClientMessage
     {
-        public override State RequiredState
+        internal override State RequiredState
         {
             get { return State.Active; }
         }
@@ -19,14 +19,14 @@ namespace Sensor.Node.Messages.Client
 
         }
 
-        public override void Decode(BsonDocument document)
+        internal override void Decode(BsonDocument document)
         {
             this.ModuleID = document["module_id"].AsInt32;
-            this.Module = this.Station.Modules.Find(m => m.Type == this.ModuleID);
+            this.Module = this.Station.ModuleManager.GetModule(this.ModuleID);
             this.Module?.Decode(document);
         }
 
-        public override void Execute()
+        internal override void Execute()
         {
             this.Module?.Tick();
         }

@@ -1,15 +1,17 @@
-﻿using System.Threading.Tasks;
+﻿using System.IO.Ports;
+using System.Threading.Tasks;
+using Sensor.Node.Managers;
 
 namespace Sensor.Node
 {
-    class Program
+    internal sealed class Program
     {
-        private static void Main() => new Program().MainAsync().GetAwaiter().GetResult();
-
-        private async Task MainAsync()
+        private static async Task Main()
         {
             StationManager.Instance.Initialize();
             SerialPortListener.Instance.Initialize();
+
+            SerialPortListener.Instance.TryAdd(new SerialPort("COM3", 115200)); // Bypass
 
             await Task.Delay(-1);
         }

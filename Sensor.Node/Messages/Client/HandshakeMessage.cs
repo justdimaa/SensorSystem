@@ -3,9 +3,9 @@ using Sensor.Node.Messages.Server;
 
 namespace Sensor.Node.Messages.Client
 {
-    class HandshakeMessage : ClientMessage
+    internal sealed class HandshakeMessage : ClientMessage
     {
-        public override State RequiredState
+        internal override State RequiredState
         {
             get { return State.Handshake; }
         }
@@ -17,12 +17,12 @@ namespace Sensor.Node.Messages.Client
 
         }
 
-        public override void Decode(BsonDocument document)
+        internal override void Decode(BsonDocument document)
         {
             this.Name = document["name"].AsString;
         }
 
-        public override void Execute()
+        internal override void Execute()
         {
             this.Station.Name = this.Name;
             this.Station.State = State.Active;

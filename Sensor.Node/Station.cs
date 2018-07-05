@@ -1,33 +1,38 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO.Ports;
 using System.Threading.Tasks;
 using MongoDB.Bson;
-using Sensor.Node.Messages.Client;
+using Sensor.Node.Managers;
 using Sensor.Node.Messages.Server;
-using Sensor.Node.Modules;
 
 namespace Sensor.Node
 {
-    class Station
+    internal sealed class Station
     {
-        public SerialPort SerialPort { get; private set; }
-        public string Name { get; set; }
-        public State State { get; set; }
-        public List<Module> Modules { get; }
+        internal SerialPort SerialPort { get; private set; }
+        internal string Name { get; set; }
+        internal State State { get; set; }
+        internal ModuleManager ModuleManager { get; }
         private string Buffer { get; set; }
 
+        /// <summary>
+        /// Initializes a new instance of the <see cref="Station"/> class.
+        /// </summary>
+        /// <param name="serialPort"></param>
         public Station(SerialPort serialPort)
         {
-            this.Modules = new List<Module>();
+            this.ModuleManager = new ModuleManager(this);
             this.Buffer = string.Empty;
             this.LoadStation(serialPort);
         }
 
+        /// <summary>
+        /// Loads the station.
+        /// </summary>
+        /// <param name="serialPort">The serial port where the station is connected.</param>
         public void LoadStation(SerialPort serialPort)
         {
-            this.Modules.Clear();
             this.SerialPort = serialPort;
             this.SerialPort.DataReceived += this.DataReceived;
 
@@ -35,7 +40,6 @@ namespace Sensor.Node
             {
                 this.SerialPort.Open();
                 this.State = State.Handshake;
-                Task.Run(async () => await this.RunPortChecker());
             }
             catch (Exception ex)
             {
@@ -43,9 +47,15 @@ namespace Sensor.Node
             }
         }
 
+        /// <summary>
+        /// Will be triggered, when new data is incoming.
+        /// Handles the data.
+        /// </summary>
+        /// <param name="sender"></param>
+        /// <param name="e"></param>
         private void DataReceived(object sender, SerialDataReceivedEventArgs e)
         {
-            var serialPort = (SerialPort) sender;
+            var serialPort = (SerialPort)sender;
             this.Buffer += serialPort.ReadExisting();
 
             while (this.Buffer.Contains("\r\n"))
@@ -59,65 +69,57 @@ namespace Sensor.Node
                     if (BsonDocument.TryParse(buffer, out var document))
                     {
                         int messageID = document["msg_id"].AsInt32;
-                        ClientMessage message = null;
+                        var message = MessageFactory.CreateClientMessage(messageID, this);
 
 #if DEBUG
                         Debug.WriteLine($"Client | {this.Name} | Message received >> {messageID}");
 #endif
 
-                        switch (messageID)
-                        {
-                            case 0x64:
-                                message = new HandshakeMessage(this);
-                                break;
-                            case 0x69:
-                                message = new AddModuleMessage(this);
-                                break;
-                            case 0x6A:
-                                message = new RemoveModuleMessage(this);
-                                break;
-                            case 0x6E:
-                                message = new UpdateModuleInfoMessage(this);
-                                break;
-                        }
-
                         if (message?.RequiredState == this.State)
                         {
-                            message?.Decode(document);
-                            message?.Execute();
+                            message.Decode(document);
+                            message.Execute();
                         }
                     }
                 });
             }
         }
 
+        /// <summary>
+        /// Sends a message in json format to the station.
+        /// </summary>
+        /// <param name="message"></param>
         public void SendData(ServerMessage message)
         {
             message.Encode();
-
             this.SerialPort.WriteLine(message.Document.ToJson());
-
-#if DEBUG
             Debug.WriteLine($"Server | {this.Name} | Message sended >> {message.Identifier}");
-#endif
         }
 
-        private async Task RunPortChecker()
+        /// <summary>
+        /// Checks if the port is active.
+        /// </summary>
+        /// <returns></returns>
+        private void CheckConnection()
         {
-            while (true)
+            if (!this.SerialPort.IsOpen)
             {
-                if (!this.SerialPort.IsOpen)
-                {
-                    Console.WriteLine("closed");
-                }
-
-                await Task.Delay(500);
+                Debug.WriteLine("closed");
+                StationManager.Instance.RemoveStation(this);
             }
         }
 
         public void Tick()
         {
-
+            this.CheckConnection();
+            //this.ModuleManager.Tick();
         }
+    }
+
+    enum State
+    {
+        Inactive,
+        Handshake,
+        Active
     }
 }
